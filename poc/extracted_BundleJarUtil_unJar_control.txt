@@ -1,0 +1,61 @@
+  private static File unJar(File jarFile, File destinationFolder, Predicate<String> nameFilter,
+      CopyOption... copyOptions)
+      throws IOException {
+    try (ZipInputStream zipIn = new ZipInputStream(
+        new BufferedInputStream(new FileInputStream(jarFile)))) {
+      unJar(zipIn, destinationFolder, nameFilter, copyOptions);
+    }
+    return destinationFolder;
+  }
+
+  private static void unJar(ZipInputStream input, File targetDirectory,
+                            Predicate<String> nameFilter,
+                            CopyOption... copyOptions)
+    throws IOException {
+
+    Path targetPath = targetDirectory.toPath().normalize();
+    boolean isSuccess = false;
+    boolean isTargetDirectoryNewlyCreated = false;
+
+    try {
+      // Check if the directory exists before trying to create it
+      if (!Files.exists(targetPath)) {
+        Files.createDirectories(targetPath);
+        isTargetDirectoryNewlyCreated = true;
+      }
+
+      ZipEntry entry;
+      while ((entry = input.getNextEntry()) != null) {
+        String entryName = entry.getName();
+
+        if (!nameFilter.test(entryName)) {
+          continue;
+        }
+
+        Path output = targetPath.resolve(entryName).normalize();
+
+        if (!output.startsWith(targetPath)) {
+          throw new IllegalArgumentException("Illegal path detected for Jar Entry : " + entryName + ". This will try to"
+                                               + " write outside the target directory, which is not allowed.");
+        }
+
+        if (entry.isDirectory()) {
+          Files.createDirectories(output);
+        } else {
+          Files.createDirectories(output.getParent());
+          Files.copy(input, output, copyOptions);
+        }
+        input.closeEntry();
+      }
+      isSuccess = true;
+    } finally {
+      // Cleanup logic: Only delete if not successful AND we created the directory
+      if (!isSuccess && isTargetDirectoryNewlyCreated && Files.exists(targetPath)) {
+        try (Stream<Path> paths = Files.walk(targetPath)) {
+          paths.sorted(Comparator.reverseOrder())
+            .map(Path::toFile)
+            .forEach(File::delete);
+        }
+      }
+    }
+  }

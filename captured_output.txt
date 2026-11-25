@@ -1,0 +1,44 @@
+== Installing a JDK + slf4j (apt) ==
+== Cloning real cdapio/cdap @ fb726c938e0668f1e8e30cb4734281033e86d968 ==
+Cloning into 'cdap'...
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+Or undo this operation with:
+HEAD is now at fb726c9 Merge pull request #16356 from cdapio/vuln/cl-09d-commons-lang3-3.22.0
+== Self-check: confirm the three PoC harnesses are byte-exact extractions of the live source at this commit ==
+(self-check passed - all three harnesses match the live source byte-for-byte at fb726c938e0668f1e8e30cb4734281033e86d968)
+== [1/3] VULNERABLE: DataprocJobMain.unJar() (cdap-runtime-ext-dataproc) ==
+Sandbox:          /tmp/dataproc-zipslip-poc14664870597196962672
+Intended extract target (archive + ".tmp"): /tmp/dataproc-zipslip-poc14664870597196962672/job-working-dir/payload.zip.tmp
+Malicious entry name in the zip: ../../outside-extraction-dir/pwned.txt
+Target file OUTSIDE the extraction dir: /tmp/dataproc-zipslip-poc14664870597196962672/outside-extraction-dir/pwned.txt
+Exists before running unJar()?   false
+Exists AFTER running the real unJar()? true
+Content: written by the attacker, outside the intended extraction directory
+BUG CONFIRMED: the real, unmodified DataprocJobMain.unJar() wrote a file
+outside its own intended extraction directory (archive name + ".tmp"),
+entirely via the zip entry's own name - no normalization, no startsWith()
+containment check, unlike the sibling BundleJarUtil.unJar() in the same
+codebase, which has exactly this check (see report.md).
+== [2/3] VULNERABLE: FileLocalizer.expand() (cdap-kubernetes) ==
+Sandbox:          /tmp/filelocalizer-zipslip-poc7648532480115225764
+Intended extract target: /tmp/filelocalizer-zipslip-poc7648532480115225764/pod-working-dir/plugins
+Malicious entry name in the zip: ../../outside-extraction-dir/pwned.txt
+Target file OUTSIDE the extraction dir: /tmp/filelocalizer-zipslip-poc7648532480115225764/outside-extraction-dir/pwned.txt
+Exists before running expand()?  false
+Exists AFTER running the real expand()? true
+Content: written by the attacker, outside the pod's intended extraction directory
+BUG CONFIRMED: the real, unmodified FileLocalizer.expand() wrote a file
+outside its own intended extraction directory, entirely via the zip
+entry's own name - no normalization, no containment check. Same missing
+check as DataprocJobMain.unJar(), a second, independent occurrence.
+== [3/3] CONTROL: BundleJarUtil.unJar() (cdap-common) - properly protected sibling ==
+Same malicious entry name as the other two PoCs: ../outside-extraction-dir/pwned.txt
+Running it through the real BundleJarUtil.unJar()...
+CORRECTLY REJECTED: Illegal path detected for Jar Entry : ../outside-extraction-dir/pwned.txt. This will try to write outside the target directory, which is not allowed.
+Exists? false
+CONTROL CONFIRMED: the real, unmodified, properly-protected sibling
+BundleJarUtil.unJar() detects and rejects the identical payload that
+succeeds against DataprocJobMain.unJar() and FileLocalizer.expand().

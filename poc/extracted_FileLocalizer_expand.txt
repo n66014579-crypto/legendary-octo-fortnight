@@ -1,0 +1,18 @@
+  private Path expand(URI uri, InputStream inputStream, Path targetDir) throws IOException {
+    LOG.debug("Localize and expand {} to {}", uri.toString(), targetDir);
+
+    try (ZipInputStream is = new ZipInputStream(inputStream)) {
+      Path targetPath = Files.createDirectories(targetDir);
+      ZipEntry entry;
+      while ((entry = is.getNextEntry()) != null && !stopped) {
+        Path outputPath = targetPath.resolve(entry.getName());
+        if (entry.isDirectory()) {
+          Files.createDirectories(outputPath);
+        } else {
+          Files.createDirectories(outputPath.getParent());
+          Files.copy(is, outputPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+      }
+    }
+    return targetDir;
+  }

@@ -1,0 +1,38 @@
+  private static void expandArchives(Collection<String> archiveNames) throws IOException {
+    for (String archive : archiveNames) {
+      unpack(Paths.get(archive));
+    }
+  }
+
+  private static void unpack(Path archiveFile) throws IOException {
+    if (!Files.isRegularFile(archiveFile)) {
+      LOG.warn("Skip archive expansion due to {} is not a file", archiveFile);
+      return;
+    }
+    unJar(archiveFile);
+  }
+
+  private static void unJar(Path archiveFile) throws IOException {
+    Path targetDir = archiveFile.resolveSibling(archiveFile.getFileName() + ".tmp");
+    LOG.debug("Expanding archive {} to {}", archiveFile, targetDir);
+
+    try (ZipInputStream zipIn = new ZipInputStream(Files.newInputStream(archiveFile))) {
+      Files.createDirectories(targetDir);
+
+      ZipEntry entry;
+      while ((entry = zipIn.getNextEntry()) != null) {
+        Path output = targetDir.resolve(entry.getName());
+
+        if (entry.isDirectory()) {
+          Files.createDirectories(output);
+        } else {
+          Files.createDirectories(output.getParent());
+          Files.copy(zipIn, output);
+        }
+      }
+    }
+
+    Files.deleteIfExists(archiveFile);
+    Files.move(targetDir, archiveFile);
+    LOG.debug("Archive expanded to {}", targetDir);
+  }
