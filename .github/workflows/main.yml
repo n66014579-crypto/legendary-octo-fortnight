@@ -1,0 +1,34 @@
+name: Verify PoC - zip-slip arbitrary file write in DataprocJobMain.unJar() and FileLocalizer.expand()
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'poc/**'
+      - '.github/workflows/verify-poc.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this PoC repo/package
+        uses: actions/checkout@v4
+
+      - name: Build and run all three PoCs against real freshly-cloned cdapio/cdap source
+        shell: bash
+        run: |
+          set -o pipefail
+          bash poc/build_and_run.sh | tee run_output.txt
+
+      - name: Fail unless BOTH vulnerable sinks reproduced AND the control was rejected
+        run: |
+          grep -c "BUG CONFIRMED" run_output.txt | grep -q "^2$"
+          grep -q "CONTROL CONFIRMED" run_output.txt
+
+      - name: Upload captured run output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: poc-run-output
+          path: run_output.txt
+          if-no-files-found: ignore
